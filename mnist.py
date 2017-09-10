@@ -22,11 +22,12 @@ from __future__ import print_function
 import gzip
 
 import numpy
-#from six.moves import xrange  # pylint: disable=redefined-builtin
+import six  # pylint: disable=redefined-builtin
 
 from tensorflow.contrib.learn.python.learn.datasets import base
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import random_seed
+from tensorflow.python.platform import gfile
 
 # CVDF mirror of http://yann.lecun.com/exdb/mnist/
 SOURCE_URL = 'https://storage.googleapis.com/cvdf-datasets/mnist/'
@@ -39,12 +40,16 @@ def _read32(bytestream):
 
 def extract_images(f):
     """Extract the images into a 4D uint8 numpy array [index, y, x, depth].
+
     Args:
       f: A file object that can be passed into a gzip reader.
+
     Returns:
       data: A 4D uint8 numpy array [index, y, x, depth].
+
     Raises:
       ValueError: If the bytestream does not start with 2051.
+
     """
     print('Extracting', f.name)
     with gzip.GzipFile(fileobj=f) as bytestream:
@@ -72,12 +77,15 @@ def dense_to_one_hot(labels_dense, num_classes):
 
 def extract_labels(f, one_hot=False, num_classes=10):
     """Extract the labels into a 1D uint8 numpy array [index].
+
     Args:
       f: A file object that can be passed into a gzip reader.
       one_hot: Does one hot encoding for the result.
       num_classes: Number of classes for the one hot encoding.
+
     Returns:
       labels: a 1D uint8 numpy array.
+
     Raises:
       ValueError: If the bystream doesn't start with 2049.
     """
@@ -163,8 +171,8 @@ class DataSet(object):
                 fake_label = [1] + [0] * 9
             else:
                 fake_label = 0
-            return [fake_image for _ in range(batch_size)], [
-                fake_label for _ in range(batch_size)
+            return [fake_image for _ in six.moves.xrange(batch_size)], [
+                fake_label for _ in six.moves.xrange(batch_size)
                 ]
         start = self._index_in_epoch
         # Shuffle for the first epoch
@@ -225,22 +233,22 @@ def read_data_sets(train_dir,
 
     local_file = base.maybe_download(TRAIN_IMAGES, train_dir,
                                      SOURCE_URL + TRAIN_IMAGES)
-    with open(local_file, 'rb') as f:
+    with gfile.Open(local_file, 'rb') as f:
         train_images = extract_images(f)
 
     local_file = base.maybe_download(TRAIN_LABELS, train_dir,
                                      SOURCE_URL + TRAIN_LABELS)
-    with open(local_file, 'rb') as f:
+    with gfile.Open(local_file, 'rb') as f:
         train_labels = extract_labels(f, one_hot=one_hot)
 
     local_file = base.maybe_download(TEST_IMAGES, train_dir,
                                      SOURCE_URL + TEST_IMAGES)
-    with open(local_file, 'rb') as f:
+    with gfile.Open(local_file, 'rb') as f:
         test_images = extract_images(f)
 
     local_file = base.maybe_download(TEST_LABELS, train_dir,
                                      SOURCE_URL + TEST_LABELS)
-    with open(local_file, 'rb') as f:
+    with gfile.Open(local_file, 'rb') as f:
         test_labels = extract_labels(f, one_hot=one_hot)
 
     if not 0 <= validation_size <= len(train_images):

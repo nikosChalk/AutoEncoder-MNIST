@@ -1,12 +1,16 @@
 
 import tensorflow as tf
 import numpy
+import os
 from tensorflow.examples.tutorials.mnist import input_data
 
 class AutoEncoder:
 
     mnsit_dataset = input_data.read_data_sets("MNIST_data", one_hot=True)
         # One-hot=True means that the output of array will have only one 1 value, and the rest will be 0. (Only one active neuron in the output layer)
+
+    _learning_rate = 10.0
+    _optimizer = tf.train.GradientDescentOptimizer(_learning_rate)
 
     def __init__(self, layers):
         """
@@ -29,13 +33,25 @@ class AutoEncoder:
         self._sess = tf.Session()
 
         for i in range(1, len(layers)): #Define the initialization of the weights
-            self._weight_matrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i - 1]], stddev=1. / numpy.sqrt(layers[i]))))
+            self._weight_matrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i - 1]], stddev=0.499)))
 
         print('Initializing Weight Variables...')
         self._sess.run(tf.global_variables_initializer())  #Initializes global variables and starts assessing the computation graph
+        self.print_weights(0)
         print('Initializing of Weight Variables Done!\n')
 
-    def _neural_network_encode(self, data):
+    def print_weights(self, epoch):
+        weights = self._sess.run(self._weight_matrix)
+        for cur_weight_matrix in range (0, len(weights)):
+            f = open(os.path.join('matrices', ('weight_matrix_' + str(cur_weight_matrix) + '_epoch_' + str(epoch) + '.txt')), 'w')
+            f.write('Matrix_' + str(cur_weight_matrix) + '\n')
+            for i in range (0, len(weights[cur_weight_matrix])):
+                for j in range (0, len(weights[cur_weight_matrix][i])):
+                    f.write(str(weights[cur_weight_matrix][i][j]) + '\t\t\t')
+                f.write('\n')
+
+
+    def _encode(self, data):
         """
         Encodes the given sample
         :param data: A Tensor of size [d_x, 1]
@@ -50,7 +66,7 @@ class AutoEncoder:
         output = tf.matmul(self._weight_matrix[(int)(len(self._weight_matrix) / 2) - 1], output)  # do not apply the tanh() function in the encoder's output layer
         return output
 
-    def _neural_network_decode(self, data):
+    def _decode(self, data):
         """
         Decodes the given sample
         :param data: A Tensor of size [d_y, 1]
@@ -65,16 +81,15 @@ class AutoEncoder:
         output = tf.nn.softmax(tf.matmul(self._weight_matrix[len(self._weight_matrix) - 1], output))  # Applay the softmax to the decoder's output layer since the output of each neuron must be in range [0, 1]
         return output
 
-    def _neural_network_model(self, data):
+    def _model_output(self, data):
         """
         Reconstucts the given sample by encoding it and then decoding it.
         :param data: A Tensor of size [d_x, 1]
         :return: A Tensor
         """
-        return self._neural_network_decode(self._neural_network_encode(data))
+        return self._decode(self._encode(data))
 
-
-    def _neural_network_dataset_output(self, dataset):
+    def _dataset_output(self, dataset):
         """
         Reconstructs all the samples from the given dataset
         :param dataset: A Tensor with d_x rows and any arbitary columns. Each column represents a data point
@@ -85,11 +100,11 @@ class AutoEncoder:
         for i in range(0, samples):  # For each sample in the batch do
             cur_sample = dataset[:, i]  # Fetch the sample from column i
             cur_sample = tf.reshape(cur_sample, shape=[self._d_x, 1])  # Re-shape it into a matrix from a vector
-            cur_sample_output = self._neural_network_model(cur_sample)  # Calculate the NN's output
+            cur_sample_output = self._model_output(cur_sample)  # Calculate the NN's output
             y_hat = (cur_sample_output) if (y_hat is None) else (tf.concat(concat_dim=1, values=[y_hat, cur_sample_output]))
         return y_hat
 
-    def train_neural_network(self, total_epochs, batch_size):
+    def train(self, total_epochs, batch_size):
         """
         Trains the weights of the given Neural Network using the MNIST dataset
         :param total_epochs: The epochs that the NN should run. Must be >0
@@ -100,9 +115,10 @@ class AutoEncoder:
             raise ValueError('Total epochs and batch size must be >0')
 
         x = tf.placeholder(dtype=tf.float32, shape=[self._d_x, batch_size])  # [d_x, batch_size]
-        y_hat = self._neural_network_dataset_output(x)  # [d_x, batch_zie]
-        cost = tf.mul(tf.constant(1 / 2, dtype=tf.float32), tf.reduce_sum(tf.square(tf.sub(x, y_hat)), axis=1))  # [d_x, 1]
-        optimizer = tf.train.GradientDescentOptimizer(0.005).minimize(cost)
+        y_hat = self._dataset_output(x)  # [d_x, batch_zie]
+        cost = tf.mul(tf.constant(1/2, dtype=tf.float32), tf.reduce_sum(tf.square(tf.sub(x, y_hat)), axis=1))  # [d_x, 1]
+        gradients = self._optimizer.compute_gradients(cost)
+        apply_grads = self._optimizer.apply_gradients(gradients)
 
         # mean_epoch_cost is defined as: mean(mean(batch_errors==cost, for i=1 up to batch_size), for i=1 up to features==d_x)
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
@@ -112,18 +128,17 @@ class AutoEncoder:
             for _ in range(total_batches):
                 batch_x, _ = AutoEncoder.mnsit_dataset.train.next_batch(batch_size)
                 batch_x = numpy.transpose(batch_x)
-                c, _ = self._sess.run([cost, optimizer], feed_dict={x: batch_x})
+                c, grads, _ = self._sess.run([cost, gradients, apply_grads], feed_dict={x: batch_x})
 
                 batch_cost = tf.constant(list(c), shape=[len(c), 1])
                 mean_epoch_cost = tf.add(mean_epoch_cost, batch_cost)
             mean_epoch_cost = tf.mul(tf.constant(1/total_batches, dtype=tf.float32), mean_epoch_cost)
             mean_epoch_cost = tf.reduce_mean(mean_epoch_cost, axis=0).eval(session=self._sess)
             print('Epoch ', (cur_epoch + 1), ' completed out of ', total_epochs, ' total epochs. Mean epoch cost is ', mean_epoch_cost)
-            print('Weights:')
-            print(self._sess.run(self._weight_matrix))
+            self.print_weights(cur_epoch+1)
         return self._sess.run(self._weight_matrix)
 
-    def test_neural_network(self):
+    def test(self):
         """
         Uses the test dataset from the MNIST for testing
         :return: A numpy array whose rows represent the features and whose columns represent a reconstructed data point. Also
@@ -131,7 +146,7 @@ class AutoEncoder:
         """
 
         test_x = tf.placeholder(dtype=tf.float32, shape=[self._d_x, AutoEncoder.test_samples()])
-        y_hat = self._neural_network_dataset_output(test_x)
+        y_hat = self._dataset_output(test_x)
         error = tf.sqrt(tf.reduce_sum(tf.square(tf.sub(test_x, y_hat)), axis=0))  # vecotr of shape [1, test_samples] indicating at index i, the error of the i-sample
         mean_error = tf.reduce_mean(error)
 
@@ -139,7 +154,7 @@ class AutoEncoder:
         for i in range(0, AutoEncoder.test_samples()):
             cur_sample = test_x[:, i]  # Fetch the sample from column i
             cur_sample = tf.reshape(cur_sample, shape=[self._d_x, 1])  # Re-shape it into a matrix [d_x, 1] from a vector
-            encoded_sample = self._neural_network_encode(cur_sample)  # [2, 1]. Enconded image
+            encoded_sample = self._encode(cur_sample)  # [2, 1]. Enconded image
             encoder_output = (encoded_sample) if (encoder_output is None) else (tf.concat(concat_dim=1, values=[encoder_output, encoded_sample]))
 
         encoder_output, mean_error = self._sess.run([encoder_output, mean_error], feed_dict={test_x: numpy.transpose(AutoEncoder.mnsit_dataset.test.images)})

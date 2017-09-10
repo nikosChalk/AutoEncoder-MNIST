@@ -13,11 +13,11 @@ layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i laye
 auto_encoder = AutoEncoder(layers)
 
 print('Initializing Training of NN...')
-auto_encoder.train_neural_network(total_epochs=1, batch_size=100)
+auto_encoder.train(total_epochs=2, batch_size=100)
 print('Training of NN Done!\n')
 
 print('Initializing Testing of NN...')
-encoder_output, mean_error = auto_encoder.test_neural_network()
+encoder_output, mean_error = auto_encoder.test()
 print('Mean Error: ', mean_error)
 print('Testing of NN Done!\n')
 
