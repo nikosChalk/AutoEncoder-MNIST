@@ -121,8 +121,10 @@ class AutoEncoder:
         tf.summary.image('output_images', tf.reshape(tf.transpose(y_hat), [-1, 28, 28, 1]), max_outputs=4)
 
         with tf.name_scope('cost', values=[x, y_hat]):
-            cost = tf.mul(tf.constant(1/2, dtype=tf.float32), tf.reduce_sum(tf.square(tf.sub(x, y_hat)), axis=1))  # [d_x, 1]
-        tf.summary.histogram('batch_cost', cost)
+            cost = tf.reduce_sum(tf.square(tf.sub(x, y_hat)), axis=1)  # [d_x, 1]
+            cost = tf.reduce_sum(cost, axis=0)  # [d_x, 1]
+            cost = tf.mul(tf.constant(1/2, dtype=tf.float32), cost)
+        tf.summary.scalar('batch_cost', cost)
 
         gradients = self._optimizer.compute_gradients(cost)
         with tf.name_scope('gradients', values=[gradients]):
@@ -135,12 +137,12 @@ class AutoEncoder:
         # mean_epoch_cost is defined as: mean(mean(batch_errors==cost, for i=1 up to batch_size), for i=1 up to features==d_x)
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
         for cur_epoch in range(0, total_epochs):
-            mean_epoch_cost = tf.constant(0, dtype=tf.float32, shape=[self._d_x, 1])  # [d_x, 1]
+            mean_epoch_cost = tf.constant(0, dtype=tf.float32)  # [d_x, 1]
             for cur_batch in range(total_batches):
                 batch_x, _ = AutoEncoder.mnsit_dataset.train.next_batch(batch_size)
                 batch_x = numpy.transpose(batch_x)
                 c = self._sess.run(cost, feed_dict={x: batch_x})
-                batch_cost = tf.constant(list(c), shape=[len(c), 1])
+                batch_cost = tf.constant(c, dtype=tf.float32)
 
                 if(cur_batch % 20 == 0): #Do not record all the batches. Just record one batch per 20 encountered batches.
                     merged_summaries = self._sess.run(tf.summary.merge_all(), feed_dict={x: batch_x})
@@ -149,7 +151,6 @@ class AutoEncoder:
                 mean_epoch_cost = tf.add(mean_epoch_cost, batch_cost)
                 print('Current Batch: ', (cur_batch+1), ' completed.')
             mean_epoch_cost = tf.mul(tf.constant(1/total_batches, dtype=tf.float32), mean_epoch_cost)
-            mean_epoch_cost = tf.reduce_mean(mean_epoch_cost, axis=0)
             mean_epoch_cost = tf.reshape(mean_epoch_cost, [])  #mean_epoch_cost was assumed to have a shape if (1,). We reshape it to a scalar.
 
             self._writer.add_summary(tf.summary.scalar(('mean_epoch_' + str(cur_epoch+1) + '_cost'), mean_epoch_cost).eval(session=self._sess))
