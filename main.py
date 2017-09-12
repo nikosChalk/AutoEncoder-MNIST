@@ -10,10 +10,10 @@ d3 = 100
 d_y = 2
 layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
 
-auto_encoder = AutoEncoder(layers)
+auto_encoder = AutoEncoder(layers, 1.0)
 
 print('Initializing Training of NN...')
-auto_encoder.train(total_epochs=2, batch_size=100)
+auto_encoder.train(total_epochs=1, batch_size=200)
 print('Training of NN Done!\n')
 
 print('Initializing Testing of NN...')
