@@ -1,15 +1,13 @@
 
+import tensorflow as tf
 
-class Foo:
+a = tf.Variable(tf.random_normal([2, 100]))
 
-    @property
-    def x(self):
-        pass
+sess = tf.Session()
 
-foo = Foo()
+sess.run(tf.global_variables_initializer())
 
-x = [5, 7, 9]
+slice = a[:, 0:4]
+slice = sess.run(slice)
 
-p = ([0,1], [2,3])
-
-print(p[1][0])
+print(slice)
