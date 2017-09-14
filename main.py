@@ -8,18 +8,16 @@ d1 = 500
 d2 = 250
 d3 = 100
 d_y = 2
-layers = [d_x, d3, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
+layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
 
-auto_encoder = AutoEncoder(layers, 1.0)
 
-print('Initializing Training of NN...')
-auto_encoder.train(total_epochs=1, batch_size=200)
-print('Training of NN Done!\n')
+auto_encoder = AutoEncoder(layers, 1e-3)
+auto_encoder.train(total_epochs=50, batch_size=1375)
 
-print('Initializing Testing of NN...')
-encoder_output, mean_error = auto_encoder.test()
-print('Mean Error: ', mean_error)
-print('Testing of NN Done!\n')
+'''
+auto_encoder = AutoEncoder(layers, 0.0001)
+auto_encoder.train(total_epochs=100, batch_size=1375)
+encoder_output = auto_encoder.test()
 
 # Plot the reconstructed output as a scatterplot. Each axis is one of the two neurons in the decoder's output layer.
 test_labels = numpy.transpose(AutoEncoder.mnsit_dataset.test.labels)  # result is [classes, test_samples]
@@ -56,8 +54,7 @@ for i in range(0, 2):
 
 figure.tight_layout()
 pyplot.show()
-
-
+'''
 
 '''
 # Display in 4 rows and 3 columns. (10 seperate subplots)
@@ -75,3 +72,4 @@ for i in range(0, AutoEncoder.num_of_classes()):
 figure.tight_layout()
 pyplot.show()
 '''
+

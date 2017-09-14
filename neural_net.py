@@ -1,8 +1,6 @@
 
 import tensorflow as tf
-import mnist
 import numpy
-import os
 from tensorflow.examples.tutorials.mnist import input_data
 
 class AutoEncoder:
@@ -26,160 +24,145 @@ class AutoEncoder:
             raise ValueError('List not symmetrical')
 
         self._layers = layers
-        self._learning_rate = learning_rate
-        self._optimizer = tf.train.GradientDescentOptimizer(self._learning_rate)
         self._d_x = layers[0]
         self._d_y = layers[(int)(len(layers)/2)]
-        self._weight_matrix = []  # contains Tesnors which represent the weight arrays between layers. w[0] = weight matrix between input layer-0 and layer-1
+        self._encoder_wmatrix = []  # contains Tesnors which represent the weight arrays between the encoder's layers. w[0] = weight matrix between input layer-0 and layer-1
+        self._decoder_wmatrix = []  # contains Tesnors which represent the weight arrays between the decoder's layers. w[0] = weight matrix between input layer-0 and layer-1
         self._sess = tf.Session()
-        self._writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_lr=' + str(self._learning_rate))
+        self._writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_lr=' + str(learning_rate))
+        self._summary_keys = ['per_batch', 'per_epoch']
 
-        for i in range(1, len(layers)): #Define the initialization of the weights
-            self._weight_matrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i - 1]], stddev=0.499), name=('w_matrix_' + str(i-1)) ))
+        print('Initializing making of Computational Graph...')
+        # Making the Computational Graph
+        # Define the initialization of the weights
+        for i in range(1, (int)(len(layers)/2)+1):
+            self._encoder_wmatrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i-1]], stddev=0.499), name=('encoder_wmatrix_' + str(i-1)) ))
+        for i in range((int)(len(layers)/2)+1, len(layers)):
+            self._decoder_wmatrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i-1]], stddev=0.499), name=('decoder_wmatrix_' + str(i-(int)(len(layers)/2)-1)) ))
 
+        # Adding summaries for the weight matrices
+        for i in range (0, len(self._encoder_wmatrix)):
+            tf.summary.histogram(self._encoder_wmatrix[i].name, self._encoder_wmatrix[i], collections=[self._summary_keys[0]])
+            tf.summary.histogram(self._decoder_wmatrix[i].name, self._decoder_wmatrix[i], collections=[self._summary_keys[0]])
+
+        # Defining NN's input place holder
+        self._nn_inp_holder = tf.placeholder(dtype=tf.float32, shape=[self._d_x, None], name='nn_input_data')  # [d_x, batch_size]
+        tf.summary.image('input_images', tf.reshape(tf.transpose(self._nn_inp_holder), [-1, 28, 28, 1]), max_outputs=4, collections=[self._summary_keys[0]])
+
+        # Defining NN's Output
+        self._encoder_op = self._encode(self._nn_inp_holder)    # [2, batch_size]
+        self._y_hat = self._decode(self._encoder_op)            # [d_x, batch_zie]
+        tf.summary.image('output_images', tf.reshape(tf.transpose(self._y_hat), [-1, 28, 28, 1]), max_outputs=4, collections=[self._summary_keys[0]])
+
+        # Defining NN's cost function
+        with tf.name_scope('cost', values=[self._nn_inp_holder, self._y_hat]):
+            self._cost = tf.reduce_sum(tf.square(tf.sub(self._nn_inp_holder, self._y_hat)))  # Scalar Value
+            self._cost = tf.mul(tf.constant(1/2, dtype=tf.float32), self._cost)
+        tf.summary.scalar('batch_cost', self._cost, collections=[self._summary_keys[0]])
+
+        # Defining NN's optimizing algorithm
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        gradients = optimizer.compute_gradients(self._cost)
+        with tf.name_scope('gradients', values=[gradients]):
+            self._minimize_op = optimizer.apply_gradients(gradients)
+        for i in range (0, len(gradients)): # Adding metrics for the gradient
+            tf.summary.histogram(('gradients_for_' + gradients[i][1].name), gradients[i][0], collections=[self._summary_keys[0]])    #Gradients for Variables
+
+        # Defining a metric for the mean epoch cost
+        self._batches_cost_holder = tf.placeholder(dtype=tf.float32, shape=[None])
+        with tf.name_scope(name='mean_epoch_cost_metrics', values=[self._batches_cost_holder]):
+            self._mean_epoch_cost = tf.reduce_mean(self._batches_cost_holder)
+            tf.summary.scalar('mean_epoch_cost', self._mean_epoch_cost, collections=[self._summary_keys[1]])
+
+        self._summaries_per_batch = tf.summary.merge_all(key=self._summary_keys[0])
+        self._summaries_per_epoch = tf.summary.merge_all(key=self._summary_keys[1])
+        self._writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
+
+        print('Initialization of making Computational Graph completed!\n')
         print('Initialization of Weight Variables...')
         self._sess.run(tf.global_variables_initializer())  #Initializes global variables and starts assessing the computation graph
-        self.print_weights(0)
         print('Initializing of Weight Variables Done!\n')
 
-    def print_weights(self, epoch):
-        weights = self._sess.run(self._weight_matrix)
-        for cur_weight_matrix in range (0, len(weights)):
-            f = open(os.path.join('matrices', ('weight_matrix_' + str(cur_weight_matrix) + '_epoch_' + str(epoch) + '.txt')), 'w')
-            f.write('Matrix_' + str(cur_weight_matrix) + '\n')
-            for i in range (0, len(weights[cur_weight_matrix])):
-                for j in range (0, len(weights[cur_weight_matrix][i])):
-                    f.write(str(weights[cur_weight_matrix][i][j]) + '\t\t\t')
-                f.write('\n')
+    def delete(self):
+        """
 
-    def _encode(self, input_data):
+        :return:
+        """
+        self._writer.close()
+        self._sess.close()
+        tf.reset_default_graph()
+
+    def _encode(self, data):
         """
         Encodes the given sample
-        :param input_data: A Tensor of size [d_x, 1]
-        :return: A Tensor of size [d_y, 1]
+        :param data: A Tensor of size [d_x, z], where z can be any number
+        :return: A Tensor of size [d_y, z]
         """
-        if (input_data.get_shape().dims != [self._d_x, 1]):
+        if (data.get_shape().dims[0] != self._d_x):
             raise ValueError('Input Tensor has wrong shape!')
 
-        output = input_data
-        for i in range(0, (int)(len(self._weight_matrix) / 2) - 1):
-            output = self._fc_layer(self._weight_matrix[i], output, op_name=('hidden_layer_' + str(i+1)))
-        output = self._enc_output_layer(self._weight_matrix[(int)(len(self._weight_matrix)/2) - 1], output)
+        output = data
+        for i in range(0, len(self._encoder_wmatrix)-1):
+            output = self._fc_layer(self._encoder_wmatrix[i], output, op_name=('encoder_hl_' + str(i+1) + '_output'))
+        output = self._enc_output_layer(self._encoder_wmatrix[len(self._encoder_wmatrix)-1], output)
         return output
 
     def _decode(self, data):
         """
         Decodes the given sample
-        :param data: A Tensor of size [d_y, 1]
-        :return: A Tensor of size [d_x, 1]
+        :param data: A Tensor of size [d_y, z], where z can be any number
+        :return: A Tensor of size [d_x, z]
         """
-        if (data.get_shape().dims != [self._d_y, 1]):
+        if (data.get_shape().dims[0] != self._d_y):
             raise ValueError('Input Tensor has wrong shape!')
 
         output = data
-        for i in range((int)(len(self._weight_matrix)/2), len(self._weight_matrix) - 1):
-            output = self._fc_layer(self._weight_matrix[i], output, op_name=('hidden_layer_' + str(i+1)))
-        output = self._dec_output_layer(self._weight_matrix[len(self._weight_matrix) - 1], output)
+        for i in range(0, len(self._decoder_wmatrix)-1):
+            output = self._fc_layer(self._decoder_wmatrix[i], output, op_name=('decoder_hl_' + str(i+1) + '_output'))
+        output = self._dec_output_layer(self._decoder_wmatrix[len(self._decoder_wmatrix)-1], output)
         return output
-
-    def _model_output(self, data):
-        """
-        Reconstucts the given sample by encoding it and then decoding it.
-        :param data: A Tensor of size [d_x, 1]
-        :return: A Tensor
-        """
-        return self._decode(self._encode(data))
-
-    def _dataset_output(self, dataset):
-        """
-        Reconstructs all the samples from the given dataset
-        :param dataset: A Tensor with d_x rows and any arbitary columns. Each column represents a data point
-        :return: A Tensor with the same size as the input consisting of the reconstructed data points.
-        """
-        samples = dataset.get_shape().dims[1].value  # Tensor ---> TensorShape ---> Dimension list ---> int value
-        y_hat = None  # Tensor with a shape same as the dataset
-        for i in range(0, samples):  # For each sample in the batch do
-            cur_sample = tf.slice(dataset, [0, i], [self._d_x, 1])  # Fetch the sample from column i
-            cur_sample_output = self._model_output(cur_sample)  # Calculate the NN's output
-            y_hat = (cur_sample_output) if (y_hat is None) else (tf.concat(concat_dim=1, values=[y_hat, cur_sample_output]))
-        return y_hat
 
     def train(self, total_epochs, batch_size):
         """
         Trains the weights of the given Neural Network using the MNIST dataset
         :param total_epochs: The epochs that the NN should run. Must be >0
-        :param batch_size: The size of each batch. Must be >0
-        :return A numpy array containing the weight matrices
+        :param batch_size: The size of each batch. Must be >0 and <= 3500 and must have 0 modulo with 55000
+        :return void
         """
-        if(total_epochs<=0 or batch_size <=0):
+        print('Initializing Training of NN...')
+        if( (total_epochs<=0) or (batch_size <=0) or (batch_size>3500) or (AutoEncoder.training_samples() % batch_size != 0)):
             raise ValueError('Total epochs and batch size must be >0')
 
-        x = tf.placeholder(dtype=tf.float32, shape=[self._d_x, batch_size], name='nn_input_data')  # [d_x, batch_size]
-        tf.summary.image('input_images', tf.reshape(tf.transpose(x), [-1, 28, 28, 1]), max_outputs=4)
-
-        y_hat = self._dataset_output(x)  # [d_x, batch_zie]
-        tf.summary.image('output_images', tf.reshape(tf.transpose(y_hat), [-1, 28, 28, 1]), max_outputs=4)
-
-        with tf.name_scope('cost', values=[x, y_hat]):
-            cost = tf.reduce_sum(tf.square(tf.sub(x, y_hat)), axis=1)  # [d_x, 1]
-            cost = tf.reduce_sum(cost, axis=0)  # [d_x, 1]
-            cost = tf.mul(tf.constant(1/2, dtype=tf.float32), cost)
-        tf.summary.scalar('batch_cost', cost)
-
-        gradients = self._optimizer.compute_gradients(cost)
-        with tf.name_scope('gradients', values=[gradients]):
-            self._optimizer.apply_gradients(gradients)
-        for i in range (0, len(gradients)):
-            tf.summary.histogram(('weight_matrix_' + str(i)), gradients[i][1])
-            tf.summary.histogram(('gradient_for_weight_matrix_' + str(i)), gradients[i][0])
-        self._writer.add_graph(graph=self._sess.graph)
-
-        # mean_epoch_cost is defined as: mean(mean(batch_errors==cost, for i=1 up to batch_size), for i=1 up to features==d_x)
+        # mean_epoch_cost is defined as: mean(batch_errors==cost, for i=1 up to batch_size)
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
+
         for cur_epoch in range(0, total_epochs):
-            mean_epoch_cost = tf.constant(0, dtype=tf.float32)  # [d_x, 1]
+            batch_cost_list = []
             for cur_batch in range(total_batches):
                 batch_x, _ = AutoEncoder.mnsit_dataset.train.next_batch(batch_size)
                 batch_x = numpy.transpose(batch_x)
-                c = self._sess.run(cost, feed_dict={x: batch_x})
-                batch_cost = tf.constant(c, dtype=tf.float32)
+                c, _ = self._sess.run([self._cost, self._minimize_op], feed_dict={self._nn_inp_holder: batch_x})
+                batch_cost_list.append(c)
 
-                if(cur_batch % 20 == 0): #Do not record all the batches. Just record one batch per 20 encountered batches.
-                    merged_summaries = self._sess.run(tf.summary.merge_all(), feed_dict={x: batch_x})
-                    self._writer.add_summary(merged_summaries, global_step=(cur_epoch*total_batches + cur_batch))
-
-                mean_epoch_cost = tf.add(mean_epoch_cost, batch_cost)
+                if(cur_batch % ((int)(total_batches/15)) == 0): #Do not record all the batches. Just a few of them
+                    self._writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), global_step=(cur_epoch*total_batches + cur_batch))
                 print('Current Batch: ', (cur_batch+1), ' completed.')
-            mean_epoch_cost = tf.mul(tf.constant(1/total_batches, dtype=tf.float32), mean_epoch_cost)
-            mean_epoch_cost = tf.reshape(mean_epoch_cost, [])  #mean_epoch_cost was assumed to have a shape if (1,). We reshape it to a scalar.
 
-            self._writer.add_summary(tf.summary.scalar(('mean_epoch_' + str(cur_epoch+1) + '_cost'), mean_epoch_cost).eval(session=self._sess))
+            self._writer.add_summary(self._summaries_per_epoch.eval(session=self._sess, feed_dict={self._batches_cost_holder: batch_cost_list}), global_step=(cur_epoch+1))
             self._writer.flush()
-            self.print_weights(cur_epoch+1)
-        self._writer.close()
-        return self._sess.run(self._weight_matrix)
+            print('Current Epoch: ', (cur_epoch + 1), ' completed.')
+
+        print('Training of NN Done!\n')
+        return
 
     def test(self):
         """
         Uses the test dataset from the MNIST for testing
-        :return: A numpy array whose rows represent the features and whose columns represent a reconstructed data point. Also
-        returns a value which represents the mean error of the testing sample.
+        :return: A numpy array whose rows represent the features and whose columns represent a reconstructed data point.
         """
 
-        test_x = tf.placeholder(dtype=tf.float32, shape=[self._d_x, AutoEncoder.test_samples()])
-        y_hat = self._dataset_output(test_x)
-        error = tf.sqrt(tf.reduce_sum(tf.square(tf.sub(test_x, y_hat)), axis=0))  # vecotr of shape [1, test_samples] indicating at index i, the error of the i-sample
-        mean_error = tf.reduce_mean(error)
-
-        encoder_output = None  # tensor of shape [2, test_samples]
-        for i in range(0, AutoEncoder.test_samples()):
-            cur_sample = test_x[:, i]  # Fetch the sample from column i
-            cur_sample = tf.reshape(cur_sample, shape=[self._d_x, 1])  # Re-shape it into a matrix [d_x, 1] from a vector
-            encoded_sample = self._encode(cur_sample)  # [2, 1]. Enconded image
-            encoder_output = (encoded_sample) if (encoder_output is None) else (tf.concat(concat_dim=1, values=[encoder_output, encoded_sample]))
-
-        encoder_output, mean_error = self._sess.run([encoder_output, mean_error], feed_dict={test_x: numpy.transpose(AutoEncoder.mnsit_dataset.test.images)})
-        return encoder_output, mean_error
+        encoder_output = self._sess.run([self._encoder_op], feed_dict={self._nn_inp_holder: numpy.transpose(AutoEncoder.mnsit_dataset.test.images)})
+        return encoder_output
 
     def _fc_layer(self, weight_matrix, layer_input, op_name='fc_layer'):
         """
@@ -190,9 +173,11 @@ class AutoEncoder:
         :return: The output of this layer, which is tanh(weight_matrix * input)
         """
         with tf.name_scope(op_name, values=[weight_matrix, layer_input]):
-            return tf.nn.tanh(tf.matmul(weight_matrix, layer_input))
+            output = tf.nn.sigmoid(tf.matmul(weight_matrix, layer_input))
+            tf.summary.histogram(op_name, output, collections=[self._summary_keys[0]])
+            return output
 
-    def _enc_output_layer(self, weight_matrix, layer_input, op_name='enc_output_layer'):
+    def _enc_output_layer(self, weight_matrix, layer_input, op_name='encoder_output_layer'):
         """
         Calculates the output of the encoder, which is a fully connected layer with no activation function.
         :param weight_matrix: A Tensor which holds the values by which the input is multiplied
@@ -201,9 +186,11 @@ class AutoEncoder:
         :return: The output of this layer, (weight_matrix * input)
         """
         with tf.name_scope(op_name, values=[weight_matrix, layer_input]):
-            return tf.matmul(weight_matrix, layer_input)
+            output = tf.matmul(weight_matrix, layer_input)
+            tf.summary.histogram(op_name, output, collections=[self._summary_keys[0]])
+            return output
 
-    def _dec_output_layer(cls, weight_matrix, layer_input, op_name='dec_output_layer'):
+    def _dec_output_layer(self, weight_matrix, layer_input, op_name='decoder_output_layer'):
         """
         Calculates the output of the decoder, which is a fully connected layer with softmax activation function.
         :param weight_matrix: A Tensor which holds the values by which the input is multiplied
@@ -212,7 +199,9 @@ class AutoEncoder:
         :return: The output of this layer which is softmax(weight_matrix * input)
         """
         with tf.name_scope(op_name, values=[weight_matrix, layer_input]):
-            return tf.nn.softmax(tf.matmul(weight_matrix, layer_input))
+            output = tf.nn.sigmoid(tf.matmul(weight_matrix, layer_input))
+            tf.summary.histogram(op_name, output, collections=[self._summary_keys[0]])
+            return output
 
     @classmethod
     def training_samples(cls):
