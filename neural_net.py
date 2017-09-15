@@ -1,11 +1,12 @@
 
 import tensorflow as tf
 import numpy
+import random
 from tensorflow.examples.tutorials.mnist import input_data
 
 class AutoEncoder:
 
-    mnsit_dataset = input_data.read_data_sets("MNIST_data", one_hot=True)
+    mnist_dataset = input_data.read_data_sets("MNIST_data", one_hot=True)
         # One-hot=True means that the output of array will have only one 1 value, and the rest will be 0. (Only one active neuron in the output layer)
 
     def __init__(self, layers, learning_rate):
@@ -32,7 +33,7 @@ class AutoEncoder:
         self._decoder_bmatrix = []   # contains Tesnors which represent the bias vector for the decoder's layers. b[i] = bias vector for layer (i+1)
         self._sess = tf.Session()
         self._writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_lr=' + str(learning_rate))
-        self._summary_keys = ['per_batch', 'per_epoch']
+        self._summary_keys = ['per_batch', 'per_epoch', 'img_summary']
 
         print('Initializing making of Computational Graph...')
         # Making the Computational Graph
@@ -54,12 +55,10 @@ class AutoEncoder:
 
         # Defining NN's input place holder
         self._nn_inp_holder = tf.placeholder(dtype=tf.float32, shape=[self._d_x, None], name='nn_input_data')  # [d_x, batch_size]
-        tf.summary.image('input_images', tf.reshape(tf.transpose(self._nn_inp_holder[:, 0:4]), [-1, 28, 28, 1]), max_outputs=4, collections=[self._summary_keys[0]]) # Get 4 images per batch as a sample
 
         # Defining NN's Output
         self._encoder_op = self._encode(self._nn_inp_holder)    # [2, batch_size]
         self._y_hat = self._decode(self._encoder_op)            # [d_x, batch_zie]
-        tf.summary.image('output_images', tf.reshape(tf.transpose(self._y_hat[:, 0:4]), [-1, 28, 28, 1]), max_outputs=4, collections=[self._summary_keys[0]])    # Get 4 images per batch as a sample
 
         # Defining NN's cost function
         with tf.name_scope('cost', values=[self._nn_inp_holder, self._y_hat]):
@@ -143,20 +142,32 @@ class AutoEncoder:
 
         # mean_epoch_cost is defined as: mean(batch_errors==cost, for i=1 up to batch_size)
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
+        print('Total Batches per epoch are: ', total_batches)
 
         for cur_epoch in range(0, total_epochs):
             batch_cost_list = []
             for cur_batch in range(total_batches):
-                batch_x, _ = AutoEncoder.mnsit_dataset.train.next_batch(batch_size)
+                batch_x, _ = AutoEncoder.mnist_dataset.train.next_batch(batch_size)
                 batch_x = numpy.transpose(batch_x)
                 c, _ = self._sess.run([self._cost, self._minimize_op], feed_dict={self._nn_inp_holder: batch_x})
                 batch_cost_list.append(c)
 
                 if(cur_batch % ((int)(total_batches/15)) == 0): #Do not record all the batches. Just a few of them
-                    self._writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), global_step=(cur_epoch*total_batches + cur_batch))
-#                print('Current Batch: ', (cur_batch+1), ' completed.')
+                    cur_step = cur_epoch*total_batches + cur_batch
+                    self._writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), cur_step)
 
-            self._writer.add_summary(self._summaries_per_epoch.eval(session=self._sess, feed_dict={self._batches_cost_holder: batch_cost_list}), global_step=(cur_epoch+1))
+            # Define image summaries for 4 random samples. (Must be done per iteration, since this summary has a buggy implementation
+            input_img_summary = tf.summary.image('input_images_' + str(cur_epoch), tf.reshape(tf.transpose(self._nn_inp_holder), [-1, 28, 28, 1]), max_outputs=4)  # Get 4 images per epoch as a sample
+            output_img_summary = tf.summary.image('output_images_' + str(cur_epoch), tf.reshape(tf.transpose(self._y_hat), [-1, 28, 28, 1]), max_outputs=4)  # Get 4 images per epoch as a sample
+            img_summaries = tf.summary.merge([input_img_summary, output_img_summary])
+            random_index = random.randrange(0, AutoEncoder.training_samples())
+            random_inp_slice = numpy.transpose(AutoEncoder.mnist_dataset.train.images)[:, random_index:random_index+4+1]   #Taking the columns random_index up to random_index+4
+
+            # Evaluate the img_summaries and the summaries_per_epoch. Write them afterwards.
+            epoch_summ, img_summaries = self._sess.run([self._summaries_per_epoch, img_summaries],
+                                                       feed_dict={self._nn_inp_holder: random_inp_slice, self._batches_cost_holder: batch_cost_list})
+            self._writer.add_summary(epoch_summ, cur_epoch+1)
+            self._writer.add_summary(img_summaries, cur_epoch+1)
             self._writer.flush()
             print('Current Epoch: ', (cur_epoch + 1), ' completed.')
 
@@ -170,7 +181,7 @@ class AutoEncoder:
         """
 
         print('Initializing Testing of NN...')
-        encoder_output = self._sess.run(self._encoder_op, feed_dict={self._nn_inp_holder: numpy.transpose(AutoEncoder.mnsit_dataset.test.images)})
+        encoder_output = self._sess.run(self._encoder_op, feed_dict={self._nn_inp_holder: numpy.transpose(AutoEncoder.mnist_dataset.test.images)})
         print('Testing of NN Done!\n')
         return encoder_output
 
@@ -184,9 +195,7 @@ class AutoEncoder:
         :return: The output of this layer, which is tanh(weight_matrix * input)
         """
         with tf.name_scope(op_name, values=[weight_matrix, layer_input]):
-            mul = tf.matmul(weight_matrix, layer_input)
-            add = tf.add(mul, bias_matrix)
-            output = tf.nn.sigmoid(add) # Broadcasting is used for performing the add operation
+            output = tf.nn.sigmoid(tf.add(tf.matmul(weight_matrix, layer_input), bias_matrix)) # Broadcasting is used for performing the add operation
             tf.summary.histogram(op_name, output, collections=[self._summary_keys[0]])
             return output
 

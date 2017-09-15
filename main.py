@@ -12,11 +12,11 @@ layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i laye
 
 
 auto_encoder = AutoEncoder(layers, 1e-3)
-auto_encoder.train(total_epochs=1500, batch_size=1000)
+auto_encoder.train(total_epochs=100, batch_size=1000)
 encoder_output = auto_encoder.test()
 
 # Plot the reconstructed output as a scatterplot. Each axis is one of the two neurons in the decoder's output layer.
-test_labels = numpy.transpose(AutoEncoder.mnsit_dataset.test.labels)  # result is [classes, test_samples]
+test_labels = numpy.transpose(AutoEncoder.mnist_dataset.test.labels)  # result is [classes, test_samples]
 numbers = [[] for _ in range(AutoEncoder.num_of_classes())]  # classifying the encoded digits. Size is [classes, samples_of_digits_for_that_class, 2]
 for i in range(0, AutoEncoder.test_samples()):
     numbers[numpy.argmax(test_labels[:, i])].append(encoder_output[:, i])
