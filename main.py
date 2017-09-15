@@ -12,7 +12,7 @@ layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i laye
 
 
 auto_encoder = AutoEncoder(layers, 1e-3)
-auto_encoder.train(total_epochs=1500, batch_size=100)
+auto_encoder.train(total_epochs=1500, batch_size=1000)
 encoder_output = auto_encoder.test()
 
 # Plot the reconstructed output as a scatterplot. Each axis is one of the two neurons in the decoder's output layer.
