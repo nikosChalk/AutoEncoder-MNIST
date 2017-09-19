@@ -10,9 +10,15 @@ d3 = 100
 d_y = 2
 layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
 
+for encoder_neurons in range(2, 30+1, 6):
+    layers[(int)(len(layers)/2)] = encoder_neurons
 
-auto_encoder = AutoEncoder(layers, 1e-3)
-auto_encoder.train(total_epochs=100, batch_size=1000)
+    auto_encoder = AutoEncoder(layers, 1e-3)
+    auto_encoder.train(total_epochs=1000, batch_size=1000)
+    auto_encoder.delete()
+
+
+'''
 encoder_output = auto_encoder.test()
 
 # Plot the reconstructed output as a scatterplot. Each axis is one of the two neurons in the decoder's output layer.
@@ -50,6 +56,7 @@ for i in range(0, 2):
 
 figure.tight_layout()
 pyplot.show()
+'''
 
 '''
 # Display in 4 rows and 3 columns. (10 seperate subplots)

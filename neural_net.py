@@ -152,23 +152,25 @@ class AutoEncoder:
                 c, _ = self._sess.run([self._cost, self._minimize_op], feed_dict={self._nn_inp_holder: batch_x})
                 batch_cost_list.append(c)
 
-                if(cur_batch % ((int)(total_batches/15)) == 0): #Do not record all the batches. Just a few of them
+                if((total_batches < 20) or (cur_batch % 15 == 0)): #Do not record all the batches. Just a few of them
                     cur_step = cur_epoch*total_batches + cur_batch
                     self._writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), cur_step)
 
-            # Define image summaries for 4 random samples. (Must be done per iteration, since this summary has a buggy implementation
-            input_img_summary = tf.summary.image('input_images_' + str(cur_epoch), tf.reshape(tf.transpose(self._nn_inp_holder), [-1, 28, 28, 1]), max_outputs=4)  # Get 4 images per epoch as a sample
-            output_img_summary = tf.summary.image('output_images_' + str(cur_epoch), tf.reshape(tf.transpose(self._y_hat), [-1, 28, 28, 1]), max_outputs=4)  # Get 4 images per epoch as a sample
-            img_summaries = tf.summary.merge([input_img_summary, output_img_summary])
-            random_index = random.randrange(0, AutoEncoder.training_samples())
-            random_inp_slice = numpy.transpose(AutoEncoder.mnist_dataset.train.images)[:, random_index:random_index+4+1]   #Taking the columns random_index up to random_index+4
+            # Defining which epochs should be recorded so that we do not have an overflow of metric data
+            if( (total_epochs < 100) or (cur_epoch % 10 == 0)):
+                # Define image summaries for 4 random samples. (Must be done per iteration, since this summary has a buggy implementation
+                input_img_summary = tf.summary.image('input_images_' + str(cur_epoch), tf.reshape(tf.transpose(self._nn_inp_holder), [-1, 28, 28, 1]), max_outputs=4)  # Get 4 images per epoch as a sample
+                output_img_summary = tf.summary.image('output_images_' + str(cur_epoch), tf.reshape(tf.transpose(self._y_hat), [-1, 28, 28, 1]), max_outputs=4)  # Get 4 images per epoch as a sample
+                img_summaries = tf.summary.merge([input_img_summary, output_img_summary])
+                random_index = random.randrange(0, AutoEncoder.training_samples())
+                random_inp_slice = numpy.transpose(AutoEncoder.mnist_dataset.train.images)[:, random_index:random_index+4+1]   #Taking the columns random_index up to random_index+4
 
-            # Evaluate the img_summaries and the summaries_per_epoch. Write them afterwards.
-            epoch_summ, img_summaries = self._sess.run([self._summaries_per_epoch, img_summaries],
-                                                       feed_dict={self._nn_inp_holder: random_inp_slice, self._batches_cost_holder: batch_cost_list})
-            self._writer.add_summary(epoch_summ, cur_epoch+1)
-            self._writer.add_summary(img_summaries, cur_epoch+1)
-            self._writer.flush()
+                # Evaluate the img_summaries and the summaries_per_epoch. Write them afterwards.
+                epoch_summ, img_summaries = self._sess.run([self._summaries_per_epoch, img_summaries],
+                                                           feed_dict={self._nn_inp_holder: random_inp_slice, self._batches_cost_holder: batch_cost_list})
+                self._writer.add_summary(epoch_summ, cur_epoch+1)
+                self._writer.add_summary(img_summaries, cur_epoch+1)
+                self._writer.flush()
             print('Current Epoch: ', (cur_epoch + 1), ' completed.')
 
         print('Training of NN Done!\n')
