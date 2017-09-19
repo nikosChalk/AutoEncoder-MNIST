@@ -68,7 +68,7 @@ class AutoEncoder:
         tf.summary.scalar('batch_cost', self._cost, collections=[self._summary_keys[0]])
 
         # Defining NN's optimizing algorithm
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        optimizer = tf.train.AdadeltaOptimizer()
         gradients = optimizer.compute_gradients(self._cost)
         with tf.name_scope('gradients', values=[gradients]):
             self._minimize_op = optimizer.apply_gradients(gradients)
