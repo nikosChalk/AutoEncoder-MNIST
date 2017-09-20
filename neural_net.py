@@ -9,12 +9,11 @@ class AutoEncoder:
     mnist_dataset = input_data.read_data_sets("MNIST_data", one_hot=True)
         # One-hot=True means that the output of array will have only one 1 value, and the rest will be 0. (Only one active neuron in the output layer)
 
-    def __init__(self, layers, learning_rate):
+    def __init__(self, layers):
         """
         Creates an AutoEncoder with the given layers which uses the Stochastic Gradient Descent optimizer. Samples of this encoder
          are assumed to be in range [0, 1]
         :param layers: A list which contains the number of layers of each layer. This list is assumed to be symmetrical and with odd size
-        :param learning_rate: A float value
         """
         if(len(layers)%2 == 0): # Checking if size is odd
             raise ValueError('Number of layers must be an odd number')
@@ -32,7 +31,6 @@ class AutoEncoder:
         self._encoder_bmatrix = []   # contains Tesnors which represent the bias vector for the encoder's layers. b[i] = bias vector for layer (i+1)
         self._decoder_bmatrix = []   # contains Tesnors which represent the bias vector for the decoder's layers. b[i] = bias vector for layer (i+1)
         self._sess = tf.Session()
-        self._writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_lr=' + str(learning_rate))
         self._summary_keys = ['per_batch', 'per_epoch', 'img_summary']
 
         print('Initializing making of Computational Graph...')
@@ -83,7 +81,6 @@ class AutoEncoder:
 
         self._summaries_per_batch = tf.summary.merge_all(key=self._summary_keys[0])
         self._summaries_per_epoch = tf.summary.merge_all(key=self._summary_keys[1])
-        self._writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
 
         print('Initialization of making Computational Graph completed!\n')
         print('Initialization of Weight Variables...')
@@ -95,7 +92,6 @@ class AutoEncoder:
 
         :return:
         """
-        self._writer.close()
         self._sess.close()
         tf.reset_default_graph()
 
@@ -140,7 +136,8 @@ class AutoEncoder:
         if( (total_epochs<=0) or (batch_size <=0) or (batch_size>3500) or (AutoEncoder.training_samples() % batch_size != 0)):
             raise ValueError('Total epochs and batch size must be >0')
 
-        # mean_epoch_cost is defined as: mean(batch_errors==cost, for i=1 up to batch_size)
+        writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + 'epochs=' + str(total_epochs) + '_batchSize=' + str(batch_size))
+        writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
         print('Total Batches per epoch are: ', total_batches)
 
@@ -154,7 +151,7 @@ class AutoEncoder:
 
                 if((total_batches < 20) or (cur_batch % 15 == 0)): #Do not record all the batches. Just a few of them
                     cur_step = cur_epoch*total_batches + cur_batch
-                    self._writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), cur_step)
+                    writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), cur_step)
 
             # Defining which epochs should be recorded so that we do not have an overflow of metric data
             if( (total_epochs < 100) or (cur_epoch % 10 == 0)):
@@ -168,11 +165,12 @@ class AutoEncoder:
                 # Evaluate the img_summaries and the summaries_per_epoch. Write them afterwards.
                 epoch_summ, img_summaries = self._sess.run([self._summaries_per_epoch, img_summaries],
                                                            feed_dict={self._nn_inp_holder: random_inp_slice, self._batches_cost_holder: batch_cost_list})
-                self._writer.add_summary(epoch_summ, cur_epoch+1)
-                self._writer.add_summary(img_summaries, cur_epoch+1)
-                self._writer.flush()
+                writer.add_summary(epoch_summ, cur_epoch+1)
+                writer.add_summary(img_summaries, cur_epoch+1)
+                writer.flush()
             print('Current Epoch: ', (cur_epoch + 1), ' completed.')
 
+        writer.close()
         print('Training of NN Done!\n')
         return
 

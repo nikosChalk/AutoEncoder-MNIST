@@ -13,7 +13,7 @@ layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i laye
 for encoder_neurons in range(2, 30+1, 6):
     layers[(int)(len(layers)/2)] = encoder_neurons
 
-    auto_encoder = AutoEncoder(layers, 1e-3)
+    auto_encoder = AutoEncoder(layers)
     auto_encoder.train(total_epochs=1000, batch_size=1000)
     auto_encoder.delete()
 
