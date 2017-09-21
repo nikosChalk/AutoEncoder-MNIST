@@ -4,14 +4,13 @@ import matplotlib.patches as mpatches
 from neural_net import AutoEncoder
 
 d_x = 784     #28*28=784
-d1 = 1000
-d2 = 500
-d3 = 250
-d_y = 2
-layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
+d1 = 128
+d2 = 64
+d_y = 32
+layers = [d_x, d1, d2, d_y, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
 
 auto_encoder = AutoEncoder(layers)
-auto_encoder.train(total_epochs=200, batch_size=1000)
+auto_encoder.train(total_epochs=200, batch_size=256)
 auto_encoder.delete()
 
 

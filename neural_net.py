@@ -195,7 +195,7 @@ class AutoEncoder:
         :return: The output of this layer, which is tanh(weight_matrix * input)
         """
         with tf.name_scope(op_name, values=[weight_matrix, layer_input]):
-            output = tf.nn.sigmoid(tf.add(tf.matmul(weight_matrix, layer_input), bias_matrix)) # Broadcasting is used for performing the add operation
+            output = tf.nn.relu(tf.add(tf.matmul(weight_matrix, layer_input), bias_matrix)) # Broadcasting is used for performing the add operation
             tf.summary.histogram(op_name, output, collections=[self._summary_keys[0]])
             return output
 
@@ -209,7 +209,7 @@ class AutoEncoder:
         :return: The output of this layer, (weight_matrix * input)
         """
         with tf.name_scope(op_name, values=[weight_matrix, layer_input]):
-            output = tf.add(tf.matmul(weight_matrix, layer_input), bias_matrix)     # Broadcasting is used for performing the add operation
+            output = tf.nn.relu(tf.add(tf.matmul(weight_matrix, layer_input), bias_matrix))     # Broadcasting is used for performing the add operation
             tf.summary.histogram(op_name, output, collections=[self._summary_keys[0]])
             return output
 
