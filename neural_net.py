@@ -129,12 +129,12 @@ class AutoEncoder:
         """
         Trains the weights of the given Neural Network using the MNIST dataset
         :param total_epochs: The epochs that the NN should run. Must be >0
-        :param batch_size: The size of each batch. Must be >0 and <= 3500 and must have 0 modulo with 55000
+        :param batch_size: The size of each batch. Must be >0 and must have 0 modulo with 55000
         :return void
         """
         print('Initializing Training of NN...')
-        if( (total_epochs<=0) or (batch_size <=0) or (batch_size>3500) or (AutoEncoder.training_samples() % batch_size != 0)):
-            raise ValueError('Total epochs and batch size must be >0')
+        if( (total_epochs<=0) or (batch_size <=0) or (AutoEncoder.training_samples() % batch_size != 0)):
+            raise ValueError('Total epochs and batch size must be >0. batch_size must be integer multipler of ' + str(AutoEncoder.training_samples()))
 
         writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_epochs=' + str(total_epochs) + '_batchSize=' + str(batch_size))
         writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
