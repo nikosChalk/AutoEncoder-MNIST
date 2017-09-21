@@ -7,15 +7,12 @@ d_x = 784     #28*28=784
 d1 = 500
 d2 = 250
 d3 = 100
-d_y = 2
+d_y = 20
 layers = [d_x, d1, d2, d3, d_y, d3, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
 
-for encoder_neurons in range(2, 30+1, 6):
-    layers[(int)(len(layers)/2)] = encoder_neurons
-
-    auto_encoder = AutoEncoder(layers)
-    auto_encoder.train(total_epochs=1000, batch_size=1000)
-    auto_encoder.delete()
+auto_encoder = AutoEncoder(layers)
+auto_encoder.train(total_epochs=5500, batch_size=1000)
+auto_encoder.delete()
 
 
 '''

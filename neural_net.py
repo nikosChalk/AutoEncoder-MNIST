@@ -37,7 +37,7 @@ class AutoEncoder:
         # Making the Computational Graph
         # Define the initialization of the weights and the biases
         for i in range(1, (int)(len(layers)/2)+1):
-            self._encoder_wmatrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i-1]], stddev=0.499), name=('encoder_wmatrix_' + str(i-1)) ))
+            self._encoder_wmatrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i-1]], stddev=0.099), name=('encoder_wmatrix_' + str(i-1)) ))
             self._encoder_bmatrix.append(tf.Variable(tf.truncated_normal([layers[i], 1], stddev=0.499), name=('encoder_bmatrix_' + str(i-1)) ))
         for i in range((int)(len(layers)/2)+1, len(layers)):
             self._decoder_wmatrix.append(tf.Variable(tf.truncated_normal([layers[i], layers[i-1]], stddev=0.499), name=('decoder_wmatrix_' + str(i-(int)(len(layers)/2)-1)) ))
@@ -136,7 +136,7 @@ class AutoEncoder:
         if( (total_epochs<=0) or (batch_size <=0) or (batch_size>3500) or (AutoEncoder.training_samples() % batch_size != 0)):
             raise ValueError('Total epochs and batch size must be >0')
 
-        writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + 'epochs=' + str(total_epochs) + '_batchSize=' + str(batch_size))
+        writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_epochs=' + str(total_epochs) + '_batchSize=' + str(batch_size))
         writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
         print('Total Batches per epoch are: ', total_batches)
