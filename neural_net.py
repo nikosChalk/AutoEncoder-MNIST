@@ -23,6 +23,7 @@ class AutoEncoder:
         if(first_half[::-1] != second_half):    # Split the list into 2 sublists and compare them. Ignore the middle element.
             raise ValueError('List not symmetrical')
 
+        self._writer = None
         self._layers = layers
         self._d_x = layers[0]
         self._d_y = layers[(int)(len(layers)/2)]
@@ -31,7 +32,7 @@ class AutoEncoder:
         self._encoder_bmatrix = []   # contains Tesnors which represent the bias vector for the encoder's layers. b[i] = bias vector for layer (i+1)
         self._decoder_bmatrix = []   # contains Tesnors which represent the bias vector for the decoder's layers. b[i] = bias vector for layer (i+1)
         self._sess = tf.Session()
-        self._summary_keys = ['per_batch', 'per_epoch', 'img_summary']
+        self._summary_keys = ['per_batch', 'per_epoch', 'test_summary']
 
         print('Initializing making of Computational Graph...')
         # Making the Computational Graph
@@ -64,6 +65,7 @@ class AutoEncoder:
             self._cost = tf.mul(tf.constant(1/2, dtype=tf.float32), self._cost)
             self._cost = tf.reduce_mean(self._cost, axis=0) # Scalar Value
         tf.summary.scalar('batch_cost', self._cost, collections=[self._summary_keys[0]])
+        tf.summary.scalar('test_cost', self._cost, collections=[self._summary_keys[2]])
 
         # Defining NN's optimizing algorithm
         optimizer = tf.train.AdadeltaOptimizer()
@@ -81,6 +83,7 @@ class AutoEncoder:
 
         self._summaries_per_batch = tf.summary.merge_all(key=self._summary_keys[0])
         self._summaries_per_epoch = tf.summary.merge_all(key=self._summary_keys[1])
+        self._test_summaries = tf.summary.merge_all(key=self._summary_keys[2])
 
         print('Initialization of making Computational Graph completed!\n')
         print('Initialization of Weight Variables...')
@@ -92,6 +95,7 @@ class AutoEncoder:
 
         :return:
         """
+        self._writer.close()
         self._sess.close()
         tf.reset_default_graph()
 
@@ -136,8 +140,10 @@ class AutoEncoder:
         if( (total_epochs<=0) or (batch_size <=0) or (AutoEncoder.training_samples() % batch_size != 0)):
             raise ValueError('Total epochs and batch size must be >0. batch_size must be integer multipler of ' + str(AutoEncoder.training_samples()))
 
-        writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_epochs=' + str(total_epochs) + '_batchSize=' + str(batch_size))
-        writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
+        if(self._writer is None):
+            self._writer = tf.summary.FileWriter('TensorBoard_logs/' + str(self._layers).replace(', ', '-') + '_epochs=' + str(total_epochs) + '_batchSize=' + str(batch_size))
+            self._writer.add_graph(graph=self._sess.graph)  # Adds a visualization graph for displaying the Computation Graph
+
         total_batches = (int)(AutoEncoder.training_samples()/batch_size)
         print('Total Batches per epoch are: ', total_batches)
 
@@ -151,7 +157,7 @@ class AutoEncoder:
 
                 if((total_batches < 20) or (cur_batch % 15 == 0)): #Do not record all the batches. Just a few of them
                     cur_step = cur_epoch*total_batches + cur_batch
-                    writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), cur_step)
+                    self._writer.add_summary(self._summaries_per_batch.eval(session=self._sess, feed_dict={self._nn_inp_holder: batch_x}), cur_step)
 
             # Defining which epochs should be recorded so that we do not have an overflow of metric data
             if( (total_epochs < 100) or (cur_epoch % 10 == 0)):
@@ -165,25 +171,49 @@ class AutoEncoder:
                 # Evaluate the img_summaries and the summaries_per_epoch. Write them afterwards.
                 epoch_summ, img_summaries = self._sess.run([self._summaries_per_epoch, img_summaries],
                                                            feed_dict={self._nn_inp_holder: random_inp_slice, self._batches_cost_holder: batch_cost_list})
-                writer.add_summary(epoch_summ, cur_epoch+1)
-                writer.add_summary(img_summaries, cur_epoch+1)
-                writer.flush()
+                self._writer.add_summary(epoch_summ, cur_epoch+1)
+                self._writer.add_summary(img_summaries, cur_epoch+1)
+                self._writer.flush()
             print('Current Epoch: ', (cur_epoch + 1), ' completed.')
 
-        writer.close()
         print('Training of NN Done!\n')
         return
 
     def test(self):
         """
-        Uses the test dataset from the MNIST for testing
-        :return: A numpy array whose rows represent the features and whose columns represent a reconstructed data point.
+        Uses the test dataset from the MNIST for testing. Note that train() must have been called beforehand.
+        :return: The cost of the dataset
         """
-
         print('Initializing Testing of NN...')
-        encoder_output = self._sess.run(self._encoder_op, feed_dict={self._nn_inp_holder: numpy.transpose(AutoEncoder.mnist_dataset.test.images)})
+
+        # Define image summaries for 10 random sample images, each being from a different class.
+        test_images = numpy.transpose(AutoEncoder.mnist_dataset.test.images)
+        test_labels = numpy.transpose(AutoEncoder.mnist_dataset.test.labels)
+        sample_images = numpy.empty(shape=(self._d_x,0), dtype=float)
+        sample_labels = [0] * AutoEncoder.num_of_classes()
+        i = random.randint(0, AutoEncoder.test_samples()-1)
+        samples_taken = 0
+        while(samples_taken < AutoEncoder.num_of_classes()):
+            cur_img = numpy.argmax(test_labels[:, i])
+            if(sample_labels[cur_img] == 0):
+                sample_images = numpy.concatenate((sample_images, numpy.reshape(test_images[:, i], (-1, 1))), axis=1)
+                sample_labels[cur_img] = 1
+                samples_taken += 1
+            i = (i+1) % AutoEncoder.test_samples()
+
+        input_img_summary = tf.summary.image('test_input_images', tf.reshape(tf.transpose(self._nn_inp_holder), [-1, 28, 28, 1]), max_outputs=10)
+        output_img_summary = tf.summary.image('test_output_images', tf.reshape(tf.transpose(self._y_hat), [-1, 28, 28, 1]), max_outputs=10)
+        img_summaries = tf.summary.merge([input_img_summary, output_img_summary])
+        img_summaries = self._sess.run(img_summaries, feed_dict={self._nn_inp_holder: sample_images})
+        self._writer.add_summary(img_summaries)
+
+        # Calculating cost and the rest summaries
+        c, test_summ = self._sess.run([self._cost, self._test_summaries], feed_dict={self._nn_inp_holder: test_images})
+        self._writer.add_summary(test_summ)
+        self._writer.flush()
+
         print('Testing of NN Done!\n')
-        return encoder_output
+        return c
 
     def _fc_layer(self, weight_matrix, layer_input, bias_matrix, op_name='fc_layer'):
         """

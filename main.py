@@ -10,7 +10,8 @@ d_y = 32
 layers = [d_x, d1, d2, d_y, d2, d1, d_x]     #layers[i] = layer's-i layers. layer-0 is input layer.
 
 auto_encoder = AutoEncoder(layers)
-auto_encoder.train(total_epochs=200, batch_size=250)
+auto_encoder.train(total_epochs=10000, batch_size=250)
+auto_encoder.test()
 auto_encoder.delete()
 
 
