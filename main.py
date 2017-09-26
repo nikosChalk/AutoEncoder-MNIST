@@ -18,6 +18,7 @@ auto_encoder.delete()
 '''
 encoder_output = auto_encoder.test()
 
+
 # Plot the reconstructed output as a scatterplot. Each axis is one of the two neurons in the decoder's output layer.
 test_labels = numpy.transpose(AutoEncoder.mnist_dataset.test.labels)  # result is [classes, test_samples]
 numbers = [[] for _ in range(AutoEncoder.num_of_classes())]  # classifying the encoded digits. Size is [classes, samples_of_digits_for_that_class, 2]
